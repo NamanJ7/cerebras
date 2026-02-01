@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Voice Translator — Cerebras</title>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<style>
+  :root {
+    --bg: #0a0c10;
+    --surface: #12141a;
+    --surface-hover: #1a1d26;
+    --border: rgba(99,102,241,0.25);
+    --border-active: rgba(99,102,241,0.6);
+    --accent: #6366f1;
+    --accent-dim: rgba(99,102,241,0.15);
+    --accent-glow: rgba(99,102,241,0.35);
+    --text: #e2e8f0;
+    --text-dim: #6b7280;
+    --text-mid: #94a3b8;
+    --red: #ef4444;
+    --green: #22c55e;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Outfit', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 40px 16px 60px;
+    background-image: radial-gradient(ellipse 90% 40% at 50% 0%, rgba(99,102,241,0.07) 0%, transparent 70%);
+  }
+
+  /* ── Header ── */
+  .header { text-align: center; margin-bottom: 32px; }
+  .header .badge {
+    display: inline-block;
+    font-size: 10px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--accent);
+    background: var(--accent-dim);
+    border: 1px solid var(--border);
+    padding: 5px 14px;
+    border-radius: 20px;
+    margin-bottom: 14px;
+  }
+  .header h1 {
+    font-size: 30px;
+    font-weight: 700;
+    background: linear-gradient(135deg, #e2e8f0 30%, var(--accent));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    letter-spacing: -0.5px;
+  }
+  .header p { font-size: 13px; color: var(--text-dim); margin-top: 6px; }
+
+  /* ── API Key ── */
+  .api-row { width: 100%; max-width: 580px; margin-bottom: 28px; }
+  .label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--text-dim);
+    margin-bottom: 6px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .label .status { font-size: 9px; letter-spacing: 1px; }
+  .status.ok { color: var(--green); }
+  .status.bad { color: var(--red); }
+
+  input, select {
+    width: 100%;
+    padding: 11px 14px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    color: var(--text);
+    font-size: 14px;
+    font-family: inherit;
+    outline: none;
+    transition: border-color 0.2s;
+    appearance: none;
+    -webkit-appearance: none;
+  }
+  input:focus, select:focus { border-color: var(--border-active); }
+  input[type="password"] { font-family: 'JetBrains Mono', monospace; letter-spacing: 2px; font-size: 13px; }
+
+  /* ── Language Row ── */
+  .lang-row {
+    width: 100%; max-width: 580px;
+    display: flex; gap: 10px; align-items: flex-end;
+    margin-bottom: 32px;
+  }
+  .lang-col { flex: 1; }
+  .swap-btn {
+    width: 40px; height: 40px; flex-shrink: 0;
+    background: var(--accent-dim);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    color: var(--accent);
+    font-size: 20px;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.2s;
+  }
+  .swap-btn:hover { background: rgba(99,102,241,0.3); transform: scale(1.08); }
+
+  select {
+    background-color: var(--surface);
+    cursor: pointer;
+  }
+  select option { background: #1e2028; color: var(--text); }
+
+  /* ── Mic Area ── */
+  .mic-area { position: relative; width: 150px; height: 150px; display: flex; align-items: center; justify-content: center; margin-bottom: 14px; }
+
+  .pulse-ring {
+    position: absolute; inset: 0; border-radius: 50%;
+    border: 2px solid rgba(99,102,241,0.5);
+    opacity: 0; pointer-events: none;
+  }
+  .listening .pulse-ring { animation: pulseRing 2s ease-out infinite; opacity: 1; }
+  .listening .pulse-ring:nth-child(2) { animation-delay: 0.66s; }
+  .listening .pulse-ring:nth-child(3) { animation-delay: 1.32s; }
+
+  @keyframes pulseRing { 0% { transform: scale(0.75); opacity: 0.7; } 100% { transform: scale(1.7); opacity: 0; } }
+
+  .mic-btn {
+    position: relative; z-index: 1;
+    width: 108px; height: 108px; border-radius: 50%; border: none;
+    background: linear-gradient(135deg, var(--accent), #4f46e5);
+    box-shadow: 0 0 32px var(--accent-glow), 0 4px 16px rgba(0,0,0,0.4);
+    color: #fff; font-size: 38px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.25s ease;
+  }
+  .mic-btn:hover { transform: scale(1.06); }
+  .mic-btn.active {
+    background: linear-gradient(135deg, var(--red), #dc2626);
+    box-shadow: 0 0 32px rgba(239,68,68,0.4), 0 4px 16px rgba(0,0,0,0.4);
+  }
+
+  /* ── Waveform ── */
+  .waveform { display: flex; align-items: center; gap: 3px; height: 38px; justify-content: center; margin-bottom: 6px; }
+  .wave-bar {
+    width: 3px; border-radius: 2px;
+    background: var(--accent);
+    height: 5px;
+    transition: height 0.15s ease, box-shadow 0.3s;
+  }
+  .waveform.active .wave-bar {
+    animation: wavePulse 1s ease-in-out infinite alternate;
+    box-shadow: 0 0 5px var(--accent);
+  }
+  .waveform.green .wave-bar { background: var(--green); box-shadow: 0 0 5px var(--green); }
+  @keyframes wavePulse { 0% { height: 6px; } 100% { height: 32px; } }
+
+  .status-text {
+    font-size: 11px; letter-spacing: 2px; text-transform: uppercase;
+    color: var(--text-dim); transition: color 0.3s; margin-bottom: 24px;
+  }
+  .status-text.active { color: var(--accent); }
+  .status-text.speaking { color: var(--green); }
+
+  /* ── Error ── */
+  .error-box {
+    width: 100%; max-width: 580px;
+    background: rgba(239,68,68,0.08);
+    border: 1px solid rgba(239,68,68,0.3);
+    border-radius: 10px;
+    padding: 11px 14px;
+    color: #fca5a5;
+    font-size: 13px;
+    margin-bottom: 18px;
+    display: none;
+    animation: fadeUp 0.25s ease;
+  }
+  .error-box.show { display: block; }
+
+  /* ── Panels ── */
+  .panels { width: 100%; max-width: 580px; display: flex; flex-direction: column; gap: 10px; margin-bottom: 28px; }
+  .panel {
+    background: rgba(18,20,26,0.7);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 16px;
+  }
+  .panel-header {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 10px;
+  }
+  .panel-header .label { margin-bottom: 0; }
+  .panel-actions a {
+    color: var(--accent); font-size: 11px; cursor: pointer;
+    letter-spacing: 0.5px; text-decoration: none; margin-left: 12px;
+  }
+  .panel-actions a:hover { color: #818cf8; }
+
+  .panel-text {
+    min-height: 56px; font-size: 15px; color: var(--text); line-height: 1.5;
+    word-wrap: break-word;
+  }
+  .panel-text.placeholder { color: var(--text-dim); font-style: italic; }
+
+  textarea {
+    width: 100%; min-height: 56px;
+    background: transparent; border: none; outline: none;
+    color: var(--text); font-size: 15px;
+    font-family: inherit; resize: none; line-height: 1.5;
+  }
+  textarea::placeholder { color: var(--text-dim); font-style: italic; }
+
+  .translate-btn {
+    margin-top: 10px; padding: 7px 18px;
+    background: var(--accent-dim);
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    color: var(--accent);
+    font-size: 11px; font-family: inherit;
+    letter-spacing: 1.5px; cursor: pointer;
+    transition: background 0.2s;
+    display: none;
+  }
+  .translate-btn.show { display: inline-block; }
+  .translate-btn:hover { background: rgba(99,102,241,0.3); }
+
+  /* ── Divider ── */
+  .divider {
+    display: flex; align-items: center; justify-content: center; gap: 0;
+  }
+  .divider-line {
+    flex: 1; height: 1px;
+    background: linear-gradient(to right, transparent, var(--border));
+  }
+  .divider-line:last-child { background: linear-gradient(to left, transparent, var(--border)); }
+  .divider-icon {
+    width: 30px; height: 30px; border-radius: 50%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: center;
+    margin: 0 8px; color: var(--accent); font-size: 14px;
+  }
+  .spinner {
+    width: 14px; height: 14px;
+    border: 2px solid var(--accent); border-top-color: transparent;
+    border-radius: 50%;
+    animation: spin 0.5s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Speaking indicator ── */
+  .speaking-row {
+    display: flex; align-items: center; gap: 8px;
+    margin-top: 10px; display: none;
+  }
+  .speaking-row.show { display: flex; }
+  .speaking-row .waveform { height: 22px; }
+  .speaking-row .wave-bar { width: 2px; }
+  .speaking-row span { font-size: 10px; color: var(--green); letter-spacing: 1.5px; }
+
+  /* ── History ── */
+  .history { width: 100%; max-width: 580px; }
+  .history-header { display: flex; justify-content: space-between; margin-bottom: 10px; }
+  .history-header .label { margin-bottom: 0; }
+  .history-item {
+    background: rgba(18,20,26,0.5);
+    border: 1px solid rgba(99,102,241,0.12);
+    border-radius: 9px;
+    padding: 10px 13px;
+    cursor: pointer;
+    margin-bottom: 6px;
+    transition: border-color 0.2s;
+    animation: fadeUp 0.25s ease both;
+  }
+  .history-item:hover { border-color: var(--border-active); }
+  .history-item .hi-top { display: flex; justify-content: space-between; margin-bottom: 3px; }
+  .history-item .hi-langs { font-size: 10px; color: var(--accent); }
+  .history-item .hi-time { font-size: 10px; color: var(--text-dim); }
+  .history-item .hi-text { font-size: 12px; color: var(--text-mid); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  /* ── Footer ── */
+  .footer { margin-top: 36px; font-size: 11px; color: var(--text-dim); text-align: center; max-width: 420px; line-height: 1.7; }
+  .footer a { color: var(--accent); text-decoration: none; }
+  .footer a:hover { color: #818cf8; }
+
+  @keyframes fadeUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+  /* stagger wave bar delays */
+  .wave-bar:nth-child(1){animation-delay:0s}.wave-bar:nth-child(2){animation-delay:0.05s}.wave-bar:nth-child(3){animation-delay:0.1s}
+  .wave-bar:nth-child(4){animation-delay:0.15s}.wave-bar:nth-child(5){animation-delay:0.2s}.wave-bar:nth-child(6){animation-delay:0.25s}
+  .wave-bar:nth-child(7){animation-delay:0.3s}.wave-bar:nth-child(8){animation-delay:0.35s}.wave-bar:nth-child(9){animation-delay:0.4s}
+  .wave-bar:nth-child(10){animation-delay:0.45s}.wave-bar:nth-child(11){animation-delay:0.5s}.wave-bar:nth-child(12){animation-delay:0.55s}
+  .wave-bar:nth-child(13){animation-delay:0.6s}.wave-bar:nth-child(14){animation-delay:0.65s}.wave-bar:nth-child(15){animation-delay:0.7s}
+  .wave-bar:nth-child(16){animation-delay:0.75s}.wave-bar:nth-child(17){animation-delay:0.8s}.wave-bar:nth-child(18){animation-delay:0.85s}
+  .wave-bar:nth-child(19){animation-delay:0.9s}.wave-bar:nth-child(20){animation-delay:0.95s}.wave-bar:nth-child(21){animation-delay:1.0s}
+  .wave-bar:nth-child(22){animation-delay:1.05s}.wave-bar:nth-child(23){animation-delay:1.1s}.wave-bar:nth-child(24){animation-delay:1.15s}
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+  <div class="badge">⚡ Powered by Cerebras</div>
+  <h1>Voice Translator</h1>
+  <p>Real-time speech translation with ultra-fast inference</p>
+</div>
+
+<!-- API Key -->
+<div class="api-row">
+  <div class="label">
+    Cerebras API Key
+    <span class="status" id="keyStatus"></span>
+  </div>
+  <input type="password" id="apiKeyInput" placeholder="csk-..." oninput="onKeyInput()" />
+</div>
+
+<!-- Language Row -->
+<div class="lang-row">
+  <div class="lang-col">
+    <div class="label">Source</div>
+    <select id="srcLang" onchange="onLangChange()"></select>
+  </div>
+  <button class="swap-btn" onclick="swapLanguages()" title="Swap languages">⇄</button>
+  <div class="lang-col">
+    <div class="label">Target</div>
+    <select id="tgtLang" onchange="onLangChange()"></select>
+  </div>
+</div>
+
+<!-- Mic -->
+<div class="mic-area" id="micArea">
+  <div class="pulse-ring"></div>
+  <div class="pulse-ring"></div>
+  <div class="pulse-ring"></div>
+  <button class="mic-btn" id="micBtn" onclick="toggleMic()">🎤</button>
+</div>
+
+<!-- Waveform -->
+<div class="waveform" id="waveform"></div>
+<div class="status-text" id="statusText">Tap to speak</div>
+
+<!-- Error -->
+<div class="error-box" id="errorBox"></div>
+
+<!-- Panels -->
+<div class="panels">
+  <!-- Source -->
+  <div class="panel">
+    <div class="panel-header">
+      <div class="label" id="srcLabel">English</div>
+      <div class="panel-actions">
+        <a id="clearBtn" onclick="clearAll()" style="display:none;">Clear</a>
+      </div>
+    </div>
+    <textarea id="srcText" placeholder="Speech will appear here… or type manually" oninput="onSrcInput()"></textarea>
+    <button class="translate-btn" id="translateBtn" onclick="translateManual()">TRANSLATE →</button>
+  </div>
+
+  <!-- Divider -->
+  <div class="divider">
+    <div class="divider-line"></div>
+    <div class="divider-icon" id="dividerIcon">↓</div>
+    <div class="divider-line"></div>
+  </div>
+
+  <!-- Target -->
+  <div class="panel">
+    <div class="panel-header">
+      <div class="label" id="tgtLabel">Spanish</div>
+      <div class="panel-actions" id="tgtActions" style="display:none;">
+        <a onclick="copyTranslation()">Copy</a>
+        <a onclick="replaySpeech()">🔊 Replay</a>
+      </div>
+    </div>
+    <div class="panel-text placeholder" id="tgtText">Translation will appear here…</div>
+    <div class="speaking-row" id="speakingRow">
+      <div class="waveform green" id="speakWave"></div>
+      <span>SPEAKING</span>
+    </div>
+  </div>
+</div>
+
+<!-- History -->
+<div class="history" id="historySection" style="display:none;">
+  <div class="history-header">
+    <div class="label">Recent</div>
+    <div class="label"><a onclick="clearHistory()" style="color:var(--accent);cursor:pointer;">Clear</a></div>
+  </div>
+  <div id="historyList"></div>
+</div>
+
+<!-- Footer -->
+<div class="footer">
+  Uses <strong>Web Speech API</strong> for recognition &amp; synthesis, and <strong>Cerebras llama-3.3-70b</strong> for translation.<br/>
+  Get a free API key at <a href="https://api.cerebras.ai" target="_blank">api.cerebras.ai</a>
+</div>
+
+<script>
+// ─── Data ───────────────────────────────────────────────
+const LANGUAGES = [
+  { code:"en", name:"English",    speech:"en-US" },
+  { code:"es", name:"Spanish",    speech:"es-ES" },
+  { code:"fr", name:"French",     speech:"fr-FR" },
+  { code:"de", name:"German",     speech:"de-DE" },
+  { code:"it", name:"Italian",    speech:"it-IT" },
+  { code:"pt", name:"Portuguese", speech:"pt-BR" },
+  { code:"ja", name:"Japanese",   speech:"ja-JP" },
+  { code:"ko", name:"Korean",     speech:"ko-KR" },
+  { code:"zh", name:"Chinese",    speech:"zh-CN" },
+  { code:"ar", name:"Arabic",     speech:"ar-SA" },
+  { code:"hi", name:"Hindi",      speech:"hi-IN" },
+  { code:"ru", name:"Russian",    speech:"ru-RU" },
+  { code:"tr", name:"Turkish",    speech:"tr-TR" },
+  { code:"pl", name:"Polish",     speech:"pl-PL" },
+  { code:"nl", name:"Dutch",      speech:"nl-NL" },
+  { code:"sv", name:"Swedish",    speech:"sv-SE" },
+  { code:"th", name:"Thai",       speech:"th-TH" },
+  { code:"vi", name:"Vietnamese", speech:"vi-VN" },
+];
+
+let recognition = null;
+let listening = false;
+let history = [];
+
+// ─── Init ───────────────────────────────────────────────
+(function init() {
+  const srcSel = document.getElementById('srcLang');
+  const tgtSel = document.getElementById('tgtLang');
+  LANGUAGES.forEach(l => {
+    srcSel.innerHTML += `<option value="${l.code}"${l.code==='en'?' selected':''}>${l.name}</option>`;
+    tgtSel.innerHTML += `<option value="${l.code}"${l.code==='es'?' selected':''}>${l.name}</option>`;
+  });
+  buildWaveform('waveform', 24);
+  buildWaveform('speakWave', 14);
+})();
+
+function buildWaveform(id, count) {
+  const el = document.getElementById(id);
+  el.innerHTML = '';
+  for (let i = 0; i < count; i++) el.innerHTML += '<div class="wave-bar"></div>';
+}
+
+// ─── API Key ────────────────────────────────────────────
+function onKeyInput() {
+  const val = document.getElementById('apiKeyInput').value.trim();
+  const st = document.getElementById('keyStatus');
+  if (!val) { st.textContent = ''; st.className = 'status'; }
+  else if (val.startsWith('csk-')) { st.textContent = '● Key detected'; st.className = 'status ok'; }
+  else { st.textContent = '● Expected csk-...'; st.className = 'status bad'; }
+}
+
+// ─── Language helpers ───────────────────────────────────
+function getLang(id) { return LANGUAGES.find(l => l.code === document.getElementById(id).value); }
+function onLangChange() {
+  document.getElementById('srcLabel').textContent = getLang('srcLang').name;
+  document.getElementById('tgtLabel').textContent = getLang('tgtLang').name;
+}
+
+function swapLanguages() {
+  const s = document.getElementById('srcLang'), t = document.getElementById('tgtLang');
+  [s.value, t.value] = [t.value, s.value];
+  const srcText = document.getElementById('srcText').value;
+  const tgtText = document.getElementById('tgtText').textContent;
+  document.getElementById('srcText').value = (tgtText === 'Translation will appear here…') ? '' : tgtText;
+  document.getElementById('tgtText').textContent = srcText || 'Translation will appear here…';
+  document.getElementById('tgtText').className = srcText ? 'panel-text' : 'panel-text placeholder';
+  onLangChange(); onSrcInput();
+}
+
+// ─── Mic ────────────────────────────────────────────────
+function toggleMic() { listening ? stopListening() : startListening(); }
+
+function startListening() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) return showError('Speech Recognition not supported. Use Chrome or Edge.');
+  clearError();
+  recognition = new SR();
+  recognition.lang = getLang('srcLang').speech;
+  recognition.interimResults = true;
+  recognition.continuous = false;
+
+  recognition.onstart = () => {
+    listening = true;
+    document.getElementById('micBtn').classList.add('active');
+    document.getElementById('micBtn').textContent = '⏹';
+    document.getElementById('micArea').classList.add('listening');
+    document.getElementById('waveform').classList.add('active');
+    setStatus('Listening…', 'active');
+    document.getElementById('srcText').value = '';
+    document.getElementById('tgtText').textContent = 'Translation will appear here…';
+    document.getElementById('tgtText').className = 'panel-text placeholder';
+    document.getElementById('tgtActions').style.display = 'none';
+  };
+
+  let finalText = '';
+  recognition.onresult = (e) => {
+    let interim = '';
+    finalText = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      if (e.results[i].isFinal) finalText += e.results[i][0].transcript;
+      else interim += e.results[i][0].transcript;
+    }
+    document.getElementById('srcText').value = finalText || interim;
+    onSrcInput();
+  };
+
+  recognition.onerror = (e) => {
+    showError('Recognition error: ' + e.error);
+    stopListening();
+  };
+
+  recognition.onend = () => {
+    const text = document.getElementById('srcText').value.trim();
+    stopListening();
+    if (text) translate(text);
+  };
+
+  recognition.start();
+}
+
+function stopListening() {
+  listening = false;
+  if (recognition) { try { recognition.stop(); } catch(e){} }
+  document.getElementById('micBtn').classList.remove('active');
+  document.getElementById('micBtn').textContent = '🎤';
+  document.getElementById('micArea').classList.remove('listening');
+  document.getElementById('waveform').classList.remove('active');
+  setStatus('Tap to speak', '');
+}
+
+// ─── UI helpers ─────────────────────────────────────────
+function setStatus(text, cls) {
+  const el = document.getElementById('statusText');
+  el.textContent = text;
+  el.className = 'status-text' + (cls ? ' ' + cls : '');
+}
+
+function showError(msg) {
+  const el = document.getElementById('errorBox');
+  el.textContent = msg;
+  el.classList.add('show');
+}
+function clearError() { document.getElementById('errorBox').classList.remove('show'); }
+
+function onSrcInput() {
+  const val = document.getElementById('srcText').value.trim();
+  document.getElementById('translateBtn').classList.toggle('show', !!val);
+  document.getElementById('clearBtn').style.display = val ? 'inline' : 'none';
+}
+
+function clearAll() {
+  document.getElementById('srcText').value = '';
+  document.getElementById('tgtText').textContent = 'Translation will appear here…';
+  document.getElementById('tgtText').className = 'panel-text placeholder';
+  document.getElementById('tgtActions').style.display = 'none';
+  onSrcInput();
+}
+
+function translateManual() { translate(document.getElementById('srcText').value.trim()); }
+
+// ─── Translate via Cerebras ─────────────────────────────
+async function translate(text) {
+  if (!text) return;
+  const apiKey = document.getElementById('apiKeyInput').value.trim();
+  if (!apiKey) return showError('Enter your Cerebras API key first.');
+  clearError();
+
+  const src = getLang('srcLang'), tgt = getLang('tgtLang');
+
+  // Show spinner
+  document.getElementById('dividerIcon').innerHTML = '<div class="spinner"></div>';
+  setStatus('Translating…', 'active');
+
+  try {
+    const res = await fetch('https://api.cerebras.ai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: 'llama-3.3-70b',
+        max_tokens: 1024,
+        messages: [
+          {
+            role: 'system',
+            content: `You are a precise translator. Translate the user's text from ${src.name} to ${tgt.name}. Output ONLY the translated text. No explanations, no quotes, no extra text.`
+          },
+          { role: 'user', content: text }
+        ]
+      })
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err?.error?.message || `API error ${res.status}`);
+    }
+
+    const data = await res.json();
+    const translated = (data.choices?.[0]?.message?.content || '').trim();
+
+    // Show result
+    const tgtEl = document.getElementById('tgtText');
+    tgtEl.textContent = translated;
+    tgtEl.className = 'panel-text';
+    document.getElementById('tgtActions').style.display = 'block';
+
+    // Save history
+    history.unshift({ src: text, tgt: translated, srcLang: src.name, tgtLang: tgt.name, time: new Date() });
+    if (history.length > 10) history.pop();
+    renderHistory();
+
+    // Auto-speak
+    speakText(translated);
+
+  } catch (e) {
+    showError(e.message);
+  }
+
+  // Reset divider
+  document.getElementById('dividerIcon').innerHTML = '↓';
+  setStatus('Tap to speak', '');
+}
+
+// ─── Speech Synthesis ───────────────────────────────────
+function speakText(text) {
+  if (!text) return;
+  window.speechSynthesis.cancel();
+  const utt = new SpeechSynthesisUtterance(text);
+  utt.lang = getLang('tgtLang').speech;
+  utt.rate = 0.9;
+  utt.pitch = 1;
+  utt.onstart = () => document.getElementById('speakingRow').classList.add('show');
+  utt.onend = () => document.getElementById('speakingRow').classList.remove('show');
+  utt.onerror = () => document.getElementById('speakingRow').classList.remove('show');
+  window.speechSynthesis.speak(utt);
+}
+
+function replaySpeech() {
+  const t = document.getElementById('tgtText').textContent;
+  if (t && t !== 'Translation will appear here…') speakText(t);
+}
+
+function copyTranslation() {
+  const t = document.getElementById('tgtText').textContent;
+  navigator.clipboard?.writeText(t).then(() => {
+    const btn = document.querySelector('#tgtActions a');
+    const orig = btn.textContent;
+    btn.textContent = 'Copied!';
+    setTimeout(() => btn.textContent = orig, 1200);
+  });
+}
+
+// ─── History ────────────────────────────────────────────
+function renderHistory() {
+  const section = document.getElementById('historySection');
+  const list = document.getElementById('historyList');
+  if (!history.length) { section.style.display = 'none'; return; }
+  section.style.display = 'block';
+  list.innerHTML = history.map((h, i) => `
+    <div class="history-item" style="animation-delay:${i*0.04}s" onclick="loadHistory(${i})">
+      <div class="hi-top">
+        <span class="hi-langs">${h.srcLang} → ${h.tgtLang}</span>
+        <span class="hi-time">${h.time.toLocaleTimeString()}</span>
+      </div>
+      <div class="hi-text">${escHtml(h.src)} → ${escHtml(h.tgt)}</div>
+    </div>
+  `).join('');
+}
+
+function loadHistory(i) {
+  const h = history[i];
+  document.getElementById('srcText').value = h.src;
+  document.getElementById('tgtText').textContent = h.tgt;
+  document.getElementById('tgtText').className = 'panel-text';
+  document.getElementById('tgtActions').style.display = 'block';
+  onSrcInput();
+}
+
+function clearHistory() { history = []; renderHistory(); }
+
+function escHtml(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+</script>
+</body>
+</html>
